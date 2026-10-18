@@ -1,0 +1,7 @@
+instakill.db
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.idea/
+instakill.egg-info/
