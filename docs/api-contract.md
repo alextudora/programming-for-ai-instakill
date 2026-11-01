@@ -82,3 +82,46 @@ Performs a semantic search over the existing posts using a pretrained embedding 
 - **422 Unprocessable Entity:**
   - If required parameters (q, limit) are missing.
   - If limit is out of the allowed 1-20 range.
+
+
+# API Contract: Get Feed
+
+## Endpoint
+`GET /feed`
+
+## Description
+Retrieves a customized feed of posts for a given user based on the selected strategy (`for_you` or `chronological`), avoiding the user's own posts and posts they have already liked.
+## Request
+
+**Query Parameters:**
+- `user_id` (integer): Required. The ID of the user requesting the feed.
+- `limit` (integer): Optional (default 20). Maximum number of posts to return (1 to 50).
+- `strategy` (string): Optional (default `for_you`). Ranking strategy: `for_you` or `chronological`.
+
+## Successful Response
+
+**Status Code:** `200 OK`
+
+**Body:**
+```json
+{
+  "user_id": 1,
+  "strategy": "for_you",
+  "results": [
+    {
+      "post_id": 3,
+      "user_id": 2,
+      "content": "just shipped a cosine similarity search, feels great",
+      "created_at": "2026-10-19T20:00:00Z",
+      "score": 2.65
+    }
+  ]
+}
+```
+## Expected Validation / Error Cases
+
+- **404 Not Found:**
+  - If the provided user_id does not exist in the database.
+- **422 Unprocessable Entity:**
+  - If limit is out of the allowed 1-50 range.
+  - If an unknown strategy is provided.

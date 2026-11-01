@@ -15,3 +15,15 @@ class Post(BaseModel):
     user_id: int
     content: str
     created_at: datetime | None = None
+
+
+class Follow(BaseModel):
+    follower_id: int
+    followee_id: int
+    created_at: datetime | None = None
+
+
+class Like(BaseModel):
+    user_id: int
+    post_id: int
+    created_at: datetime | None = None

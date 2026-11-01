@@ -29,3 +29,7 @@ pytest
 W1 Repo+API → W3 CRUD+DB → W4 Feed v0 → W7 Baseline+eval plan → W9 ML+pretrained feature → W11 Profile+optimize → W13 Feature freeze+E2E → W14 Red-team+Demo Day.
 
 At the end of each week: a demonstrable commit/tag.
+
+## Feed Complexity (Week 4)
+- **Big-O per request:** One `GET /feed` request runs in $O(C \log k)$ time, where $C$ is the number of candidates and $k$ is the limit. This is achieved by utilizing a min-heap (`heapq.nsmallest`) to maintain only the top-$k$ scored posts without fully sorting all candidates.
+- **Precomputation:** To scale further, freshness and popularity signals (which do not depend on the specific user) can be precomputed or cached periodically per post rather than computed dynamically on every request.
