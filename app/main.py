@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
-
+from app.api import users, posts, follows, likes
 from app.db.database import init_db
 from app.adapters.encoder import SemanticEncoder
 from app.repositories.post_repository import PostRepository
 from app.services.search_service import SearchService
 from app.services.post_service import PostService
+from app.services.model_scorer import load_model
 
 search_service = None
 post_service = PostService()
@@ -14,6 +15,11 @@ post_service = PostService()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+
+    # Load the learned model once at startup
+    model_loaded = load_model()
+    if not model_loaded:
+        print("Warning: like_model.npz not found. The 'learned' strategy will return 503.")
 
     global search_service
     encoder = SemanticEncoder()
@@ -61,10 +67,10 @@ def get_user_feed(
         Returns the user's customized feed based on the selected ranking strategy.
     """
     # Validate strategy parameter contract
-    if strategy not in ["for_you", "chronological"]:
+    if strategy not in ["for_you", "chronological", "learned"]:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid strategy '{strategy}'. Must be 'for_you' or 'chronological'."
+            detail=f"Invalid strategy '{strategy}'. Must be 'for_you' or 'chronological' or 'learned'."
         )
 
     try:
@@ -81,3 +87,9 @@ def get_user_feed(
         "strategy": strategy,
         "results": feed_posts
     }
+
+# Register all CRUD routers
+app.include_router(users.router)
+app.include_router(posts.router)
+app.include_router(follows.router)
+app.include_router(likes.router)

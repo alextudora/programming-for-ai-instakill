@@ -1,9 +1,10 @@
+import numpy as np
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from app.domain.models import Post
 from app.domain.ranking import FeedSignals, rank_feed
 from app.db.database import get_connection
-
+from app.services.model_scorer import get_model, predict
 
 class PostService:
     """
@@ -50,6 +51,8 @@ class PostService:
         """
         # Fix the present moment once per request
         now = datetime.now(timezone.utc)
+        now_ts = now.timestamp()
+        DAY = 86400
 
         with get_connection() as conn:
             # 1. Validate user existence (to return 404 later if missing)
@@ -125,6 +128,64 @@ class PostService:
                         "content": p.content,
                         "created_at": p.created_at.isoformat().replace("+00:00", "Z"),
                         "score": score
+                    })
+
+            elif strategy == "learned":
+                # Load the trained model (throws 503 if missing)
+                model = get_model()
+
+                # Take the current user's metadata
+                user_likes_cnt = conn.execute("SELECT COUNT(*) FROM \"like\" WHERE user_id = ?", (user_id,)).fetchone()[
+                    0]
+                follows_rows = conn.execute("SELECT followee_id FROM follow WHERE follower_id = ?",
+                                            (user_id,)).fetchall()
+                followed_authors = {r["followee_id"] for r in follows_rows}
+
+                # Extract the global statistics needed for normalization
+                likes_rows = conn.execute("SELECT post_id, COUNT(*) as cnt FROM \"like\" GROUP BY post_id").fetchall()
+                post_likes = {r["post_id"]: r["cnt"] for r in likes_rows}
+                max_likes = max(post_likes.values()) if post_likes else 0
+
+                # Build the feature vectors for the 6 signals
+                n_candidates = len(candidates)
+                features = np.zeros((n_candidates, 6))
+
+                for i, p in enumerate(candidates):
+                    age_days = (now_ts - p.created_at.timestamp()) / DAY
+
+                    # 1. Freshness
+                    features[i, 0] = 0.5 ** (age_days / model["half_life_days"])
+
+                    # 2. Affinity
+                    features[i, 1] = 1.0 if p.user_id in followed_authors else 0.0
+
+                    # 3. Popularity
+                    features[i, 2] = post_likes.get(p.id, 0) / max(max_likes, 1)
+
+                    # 4. Activity
+                    features[i, 3] = min(1.0, np.log1p(user_likes_cnt) / np.log1p(model["activity_cap"]))
+
+                    # 5. Lifetime
+                    features[i, 4] = np.log1p(post_likes.get(p.id, 0)) / np.log1p(max(max_likes, 1))
+
+                    # 6. Age
+                    features[i, 5] = min(1.0, age_days / model["age_cap_days"])
+
+                # Generate the scores directly through NumPy propagation
+                scores = predict(model, features)
+
+                # Sort the candidates (descending by score)
+                ranked_indices = np.argsort(-scores)
+
+                results = []
+                for idx in ranked_indices[:limit]:
+                    p = candidates[idx]
+                    results.append({
+                        "post_id": p.id,
+                        "user_id": p.user_id,
+                        "content": p.content,
+                        "created_at": p.created_at.isoformat().replace("+00:00", "Z"),
+                        "score": float(scores[idx])
                     })
                 return results
 
