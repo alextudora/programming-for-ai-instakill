@@ -34,8 +34,9 @@ CREATE TABLE IF NOT EXISTS "like" (
 """
 
 
-def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
+    """Open the application database, or an explicit database for isolated replays."""
+    conn = sqlite3.connect(db_path or DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 

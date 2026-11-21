@@ -1,4 +1,5 @@
 import numpy as np
+from contextlib import closing
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from app.domain.models import Post
@@ -44,17 +45,20 @@ class PostService:
 
         return new_post
 
-    def get_feed(self, user_id: int, limit: int = 20, strategy: str = "for_you") -> List[Dict[str, Any]]:
+    def get_feed(self, user_id: int, limit: int = 20, strategy: str = "for_you",
+                 now: datetime | None = None, db_path: str | None = None) -> List[Dict[str, Any]]:
         """
         Generates a feed of posts for the given user, avoiding their own posts and already liked posts.
         Orchestrates DB reads and delegates the pure ranking math to the domain function.
         """
         # Fix the present moment once per request
-        now = datetime.now(timezone.utc)
+        now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
         now_ts = now.timestamp()
         DAY = 86400
 
-        with get_connection() as conn:
+        with closing(get_connection(db_path)) as conn:
             # 1. Validate user existence (to return 404 later if missing)
             user_row = conn.execute("SELECT id FROM user WHERE id = ?", (user_id,)).fetchone()
             if not user_row:
@@ -129,6 +133,7 @@ class PostService:
                         "created_at": p.created_at.isoformat().replace("+00:00", "Z"),
                         "score": score
                     })
+                return results
 
             elif strategy == "learned":
                 # Load the trained model (throws 503 if missing)
